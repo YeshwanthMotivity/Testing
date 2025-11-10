@@ -1,827 +1,37 @@
-# # import os
-# # import shutil
-# # import subprocess
-# # import whisper
-# # from langdetect import detect
-
-# # OUTPUT_DIR = "data/output/Language/"
-
-# # # Load Whisper model (you can use "tiny", "base", "small", "medium", "large")
-# # model = whisper.load_model("small")
-
-# # def extract_audio(video_path, output_audio="temp_audio.wav"):
-# #     """Extracts audio from video using ffmpeg (16kHz mono)."""
-# #     command = [
-# #         "ffmpeg", "-i", video_path,
-# #         "-ar", "16000", "-ac", "1",
-# #         output_audio, "-y"
-# #     ]
-# #     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-# #     return output_audio
-
-# # def transcribe_audio(audio_file):
-# #     """Transcribes speech using Whisper."""
-# #     result = model.transcribe(audio_file)
-# #     text = result["text"]
-# #     detected_lang = result.get("language", "unknown")
-# #     return text.strip(), detected_lang
-
-# # def process_language(file_path):
-# #     """Detects language from speech/text and moves file to respective folder."""
-# #     file_ext = os.path.splitext(file_path)[1].lower()
-
-# #     # Step 1: Extract audio if video
-# #     if file_ext in [".mp4", ".mkv", ".avi", ".mov"]:
-# #         audio_path = extract_audio(file_path)
-# #         text, whisper_lang = transcribe_audio(audio_path)
-# #         os.remove(audio_path)
-
-# #     # Step 2: Handle audio files (added .aac support)
-# #     elif file_ext in [".wav", ".mp3", ".flac", ".aac"]:
-# #         text, whisper_lang = transcribe_audio(file_path)
-
-# #     # Step 3: Handle text files
-# #     elif file_ext == ".txt":
-# #         with open(file_path, "r", encoding="utf-8") as f:
-# #             text = f.read()
-# #         whisper_lang = detect(text)
-
-# #     else:
-# #         print(f"❌ Unsupported file format: {file_ext}")
-# #         return
-
-# #     if not text.strip():
-# #         print("⚠️ No speech detected.")
-# #         return
-
-# #     # Step 4: Confirm language
-# #     try:
-# #         lang_detect = detect(text)
-# #     except:
-# #         lang_detect = "unknown"
-
-# #     print(f"🗣 Whisper detected: {whisper_lang}")
-# #     print(f"🔎 LangDetect detected: {lang_detect}")
-# #     print(f"📝 Extracted Text: {text[:100]}...")
-
-# #     final_lang = whisper_lang or lang_detect
-
-# #     # Step 5: Move file into respective folder
-# #     lang_folder = os.path.join(OUTPUT_DIR, final_lang)
-# #     os.makedirs(lang_folder, exist_ok=True)
-
-# #     shutil.move(file_path, os.path.join(lang_folder, os.path.basename(file_path)))
-# #     print(f"✅ Moved {file_path} → {lang_folder}/")
-
-
-# # import os
-# # import shutil
-# # import subprocess
-# # import whisper
-# # from langdetect import detect, DetectorFactory, detect_langs
-
-# # # ---------- Stability ----------
-# # DetectorFactory.seed = 0
-
-# # # ---------- Paths ----------
-# # BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# # OUTPUT_DIR = os.path.join(BASE_DIR, "data", "output")
-
-# # LANGUAGES_DIR = os.path.join(OUTPUT_DIR, "Languages")
-# # BGM_DIR = os.path.join(OUTPUT_DIR, "bgm")
-# # REMIX_DIR = os.path.join(OUTPUT_DIR, "remix")
-# # TEMP_DIR = os.path.join(BASE_DIR, "temp_demucs")
-
-# # os.makedirs(LANGUAGES_DIR, exist_ok=True)
-# # os.makedirs(BGM_DIR, exist_ok=True)
-# # os.makedirs(REMIX_DIR, exist_ok=True)
-# # os.makedirs(TEMP_DIR, exist_ok=True)
-
-# # # ---------- Lang map ----------
-# # LANG_MAP = {
-# #     "en": "english",
-# #     "hi": "hindi",
-# #     "te": "telugu",
-# #     "ta": "tamil",
-# #     "ml": "malayalam",
-# #     "kn": "kannada",
-# #     "gu": "gujarati",
-# #     "bn": "bengali",
-# #     "pa": "punjabi",
-# #     "ur": "urdu",
-# #     "fr": "french",
-# #     "es": "spanish",
-# #     "de": "german",
-# #     "it": "italian",
-# #     "zh": "chinese",
-# #     "ja": "japanese",
-# #     "ko": "korean",
-# #     "mr": "marathi",
-# #     "unknown": "unknown",
-# # }
-
-# # # ---------- Whisper ----------
-# # model = whisper.load_model("small")  # upgrade to medium/large for better detection
-
-# # # ---------- Helper: ffmpeg audio extraction ----------
-# # def extract_audio(video_path, output_audio="temp_audio.wav"):
-# #     """Extracts mono 16kHz audio using ffmpeg."""
-# #     command = [
-# #         "ffmpeg", "-i", video_path,
-# #         "-ar", "16000", "-ac", "1",
-# #         output_audio, "-y"
-# #     ]
-# #     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-# #     return output_audio
-
-# # # ---------- NEW: Demucs separation ----------
-# # def run_demucs(input_path):
-# #     """Runs Demucs and returns path to vocals stem."""
-# #     command = [
-# #         "demucs", input_path, "-o", TEMP_DIR
-# #     ]
-# #     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-# #     # Demucs saves inside TEMP_DIR/htdemucs/songname/
-# #     song_name = os.path.splitext(os.path.basename(input_path))[0]
-# #     stem_dir = os.path.join(TEMP_DIR, "htdemucs", song_name)
-
-# #     if not os.path.exists(stem_dir):
-# #         raise RuntimeError("Demucs output not found!")
-
-# #     vocals_path = os.path.join(stem_dir, "vocals.wav")
-
-# #     # Move other stems to bgm/
-# #     for stem in ["drums.wav", "bass.wav", "other.wav"]:
-# #         stem_path = os.path.join(stem_dir, stem)
-# #         if os.path.exists(stem_path):
-# #             dest = os.path.join(BGM_DIR, f"{song_name}_{stem}")
-# #             shutil.move(stem_path, dest)
-
-# #     return vocals_path  # return vocals for transcription
-
-# # # ---------- Chunked transcription ----------
-# # def transcribe_chunked(audio_source, chunk_sec=25, min_chunk_sec=5):
-# #     import numpy as np
-# #     audio = whisper.load_audio(audio_source)
-# #     sr = 16000
-# #     chunk_samples = int(chunk_sec * sr)
-# #     min_chunk_samples = int(min_chunk_sec * sr)
-
-# #     lang_weights = {}
-# #     texts = []
-
-# #     for start in range(0, len(audio), chunk_samples):
-# #         seg = audio[start:start + chunk_samples]
-# #         if len(seg) < min_chunk_samples:
-# #             continue
-
-# #         result = model.transcribe(
-# #             seg,
-# #             fp16=False,
-# #             condition_on_previous_text=False,
-# #             temperature=0.0,
-# #             beam_size=5,
-# #             task="transcribe",
-# #         )
-
-# #         seg_text = result.get("text", "").strip()
-# #         seg_lang = result.get("language", "unknown")
-# #         if not seg_text:
-# #             continue
-
-# #         weight = len(seg_text)
-# #         code = seg_lang.split("-")[0]
-# #         lang_weights[code] = lang_weights.get(code, 0) + weight
-# #         texts.append(seg_text)
-
-# #     return " ".join(texts).strip(), lang_weights
-
-# # # ---------- Fallback multi-language detection ----------
-# # def detect_multiple_languages_from_text(text):
-# #     langs = set()
-# #     if not text.strip():
-# #         return []
-# #     try:
-# #         for d in detect_langs(text):
-# #             langs.add(d.lang.split("-")[0])
-# #     except:
-# #         pass
-# #     return list(langs)
-
-# # # ---------- Core ----------
-# # def process_language(file_path):
-# #     file_ext = os.path.splitext(file_path)[1].lower()
-
-# #     # 1) Extract audio if video
-# #     if file_ext in [".mp4", ".mkv", ".avi", ".mov"]:
-# #         audio_path = extract_audio(file_path)
-# #     else:
-# #         audio_path = file_path
-
-# #     # 2) Run Demucs → get vocals
-# #     vocals_path = run_demucs(audio_path)
-
-# #     # 3) Transcribe vocals only
-# #     text, lang_weights = transcribe_chunked(vocals_path)
-
-# #     # 4) Heuristic vocals detection
-# #     cleaned_text = text.replace("♪", "").replace("♫", "").strip()
-# #     word_count = len(cleaned_text.split())
-# #     has_vocals = word_count > 10
-
-# #     # 5) Language & remix logic
-# #     total_weight = sum(lang_weights.values()) or 1
-# #     langs_sorted = sorted(lang_weights.items(), key=lambda x: x[1], reverse=True)
-# #     detected_langs = [l for l, _ in langs_sorted] or ["unknown"]
-
-# #     MIN_SECOND_LANG_SHARE = 0.20
-# #     is_remix = False
-# #     if len(langs_sorted) >= 2:
-# #         second_share = langs_sorted[1][1] / total_weight
-# #         is_remix = second_share >= MIN_SECOND_LANG_SHARE
-
-# #     shares_str = ", ".join([f"{LANG_MAP.get(l,l)}={w/total_weight:.0%}" for l, w in langs_sorted]) or "none"
-# #     print(f"📝 Text snippet: {text[:100]}...")
-# #     print(f"🌍 Chunk-wise language shares: {shares_str}")
-# #     print(f"🎙 Vocals detected: {'yes' if has_vocals else 'no'} | Remix: {'yes' if is_remix else 'no'}")
-
-# #     # 6) Routing
-# #     if not has_vocals:
-# #         base_folder = BGM_DIR
-# #     elif is_remix:
-# #         pretty = " + ".join(LANG_MAP.get(l, l) for l, _ in langs_sorted[:4])
-# #         base_folder = os.path.join(REMIX_DIR, f"Remix ({pretty})")
-# #     else:
-# #         lang_code = detected_langs[0]
-# #         language = LANG_MAP.get(lang_code, lang_code)
-# #         base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-
-# #     os.makedirs(base_folder, exist_ok=True)
-
-# #     # 7) Move original file
-# #     destination = os.path.join(base_folder, os.path.basename(file_path))
-# #     if os.path.exists(destination):
-# #         base, ext = os.path.splitext(destination)
-# #         i = 1
-# #         while os.path.exists(f"{base}_copy{i}{ext}"):
-# #             i += 1
-# #         destination = f"{base}_copy{i}{ext}"
-
-# #     shutil.move(file_path, destination)
-# #     print(f"✅ Moved {file_path} → {destination}")
-
-
-# # # language_detector.py
-
-# # import os
-# # import shutil
-# # import subprocess
-# # # REMOVE: import whisper
-# # # ADD: 
-# # from faster_whisper import WhisperModel
-# # from langdetect import DetectorFactory, detect_langs
-
-# # # ---------- Stability ----------
-# # DetectorFactory.seed = 0
-
-# # # ---------- Paths ----------
-# # BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# # OUTPUT_DIR = os.path.join(BASE_DIR, "data", "output")
-
-# # LANGUAGES_DIR = os.path.join(OUTPUT_DIR, "Languages")
-# # BGM_DIR = os.path.join(OUTPUT_DIR, "bgm")
-# # REMIX_DIR = os.path.join(OUTPUT_DIR, "remix")
-
-# # os.makedirs(LANGUAGES_DIR, exist_ok=True)
-# # os.makedirs(BGM_DIR, exist_ok=True)
-# # os.makedirs(REMIX_DIR, exist_ok=True)
-
-# # # ---------- Lang map ----------
-# # LANG_MAP = {
-# #     "en": "english", "hi": "hindi", "te": "telugu", "ta": "tamil", "ml": "malayalam",
-# #     "kn": "kannada", "gu": "gujarati", "bn": "bengali", "pa": "punjabi", "ur": "urdu",
-# #     "fr": "french", "es": "spanish", "de": "german", "it": "italian", "zh": "chinese",
-# #     "ja": "japanese", "ko": "korean", "mr": "marathi", "unknown": "unknown",
-# # }
-
-# # # ---------- Whisper (Updated for faster-whisper) ----------
-# # print("📥 Loading Whisper model...")
-# # # Load the 'small' model, specify 'cpu', and use 'int8' for fastest CPU speed
-# # model = WhisperModel(
-# #     "small",             # Keeps your desired 'small' model size
-# #     device="cpu",        # Explicitly targets the CPU
-# #     compute_type="int8"  # Enables INT8 quantization for max speed
-# # )
-# # print("✅ Whisper model loaded")
-
-# # # ---------- Audio extractor ----------
-# # def extract_audio(video_path, output_audio="temp_audio.wav"):
-# #     """Extract mono 16kHz audio using ffmpeg."""
-# #     print(f"🎬 Extracting audio from video: {video_path}")
-# #     command = ["ffmpeg", "-i", video_path, "-ar", "16000", "-ac", "1", output_audio, "-y"]
-# #     # We still use subprocess for ffmpeg
-# #     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-# #     print(f"✅ Extracted audio → {output_audio}")
-# #     return output_audio
-
-# # # ---------- Transcribe (New Optimized Function) ----------
-# # # Replaces the old transcribe_chunked function
-# # def transcribe_audio(audio_path):
-# #     """Transcribe entire audio using faster-whisper's optimized engine."""
-    
-# #     # model.transcribe handles audio loading and chunking internally
-# #     segments, info = model.transcribe(audio_path, beam_size=5)
-
-# #     langs_detected = {}
-# #     texts = []
-    
-# #     # Iterate through segments returned by the model
-# #     for segment in segments:
-# #         seg_text = segment.text.strip()
-        
-# #         # faster-whisper provides overall language in 'info'
-# #         seg_lang = info.language
-        
-# #         if seg_text:
-# #             texts.append(seg_text)
-# #             langs_detected[seg_lang] = langs_detected.get(seg_lang, 0) + len(seg_text.split())
-# #             print(f"   🎧 Segment: Detected {seg_lang}")
-
-# #     return " ".join(texts), langs_detected
-
-# # # ---------- Core ----------
-# # def process_file(file_path):
-# #     print(f"\n🚀 Processing file: {file_path}")
-# #     file_ext = os.path.splitext(file_path)[1].lower()
-
-# #     # Extract audio if it's a video
-# #     if file_ext in [".mp4", ".mkv", ".avi", ".mov"]:
-# #         audio_path = extract_audio(file_path)
-# #     else:
-# #         audio_path = file_path
-
-# #     # Transcribe audio (UPDATED CALL)
-# #     text, lang_weights = transcribe_audio(audio_path) # Calls the new optimized function
-    
-# #     langs_sorted = sorted(lang_weights.items(), key=lambda x: x[1], reverse=True)
-# #     detected_langs = [l for l, _ in langs_sorted]
-
-# #     print(f"🌍 Languages detected with weights: {lang_weights}")
-
-# #     # Cleanup + heuristic
-# #     cleaned_text = text.replace("♪", "").replace("♫", "").strip()
-# #     word_count = len(cleaned_text.split())
-# #     print(f"🔍 Word count: {word_count}")
-
-# #     # --- New Hindi/Urdu Logic ---
-# #     if "hi" in detected_langs and "ur" in detected_langs:
-# #         primary_lang = "hi"
-# #         base_folder = os.path.join(LANGUAGES_DIR, LANG_MAP.get(primary_lang, primary_lang), "vocals")
-# #         print(f"➡️ Classified as: VOCALS ({LANG_MAP.get(primary_lang, primary_lang)}) due to Hindi/Urdu mix")
-# #     # --- Original Routing Logic ---
-# #     elif word_count <= 10:
-# #         base_folder = BGM_DIR
-# #         print("➡️ Classified as: PURE BGM")
-# #     elif len(detected_langs) >= 2:
-# #         base_folder = REMIX_DIR
-# #         print(f"➡️ Classified as: REMIX ({detected_langs})")
-# #     else:
-# #         primary_lang = detected_langs[0] if detected_langs else "unknown"
-# #         language = LANG_MAP.get(primary_lang, primary_lang)
-# #         base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-# #         print(f"➡️ Classified as: VOCALS ({language})")
-
-# #     os.makedirs(base_folder, exist_ok=True)
-
-# #     # Move file
-# #     destination = os.path.join(base_folder, os.path.basename(file_path))
-# #     if os.path.exists(destination):
-# #         base, ext = os.path.splitext(destination)
-# #         i = 1
-# #         while os.path.exists(f"{base}_copy{i}{ext}"):
-# #             i += 1
-# #         destination = f"{base}_copy{i}{ext}"
-
-# #     shutil.move(file_path, destination)
-# #     print(f"✅ Final move → {destination}")
-
-
-# # language_detector.py
-
-# import os
-# import shutil
-# import subprocess
-# from faster_whisper import WhisperModel
-# from langdetect import DetectorFactory, detect_langs
-
-# # ---------- Stability ----------
-# DetectorFactory.seed = 0
-# print("--- DEBUG: Stability seed set to 0 ---")
-
-# # ---------- Paths ----------
-# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# OUTPUT_DIR = os.path.join(BASE_DIR, "data", "output")
-
-# LANGUAGES_DIR = os.path.join(OUTPUT_DIR, "Languages")
-# BGM_DIR = os.path.join(OUTPUT_DIR, "bgm")
-# REMIX_DIR = os.path.join(OUTPUT_DIR, "remix")
-
-# print(f"--- DEBUG: BASE_DIR: {BASE_DIR}")
-# print(f"--- DEBUG: Output directories setup: Languages={LANGUAGES_DIR}, BGM={BGM_DIR}, REMIX={REMIX_DIR}")
-
-# os.makedirs(LANGUAGES_DIR, exist_ok=True)
-# os.makedirs(BGM_DIR, exist_ok=True)
-# os.makedirs(REMIX_DIR, exist_ok=True)
-
-# # ---------- Lang map (remains the same) ----------
-# LANG_MAP = {
-#     "en": "english", "hi": "hindi", "te": "telugu", "ta": "tamil", "ml": "malayalam",
-#     "kn": "kannada", "gu": "gujarati", "bn": "bengali", "pa": "punjabi", "ur": "urdu",
-#     "fr": "french", "es": "spanish", "de": "german", "it": "italian", "zh": "chinese",
-#     "ja": "japanese", "ko": "korean", "mr": "marathi", "unknown": "unknown",
-# }
-
-# # ---------- Whisper (Updated for faster-whisper) ----------
-# print("📥 Loading Whisper model...")
-# model = WhisperModel(
-#     "small",             # Keeps your desired 'small' model size
-#     device="cpu",        # Explicitly targets the CPU
-#     compute_type="int8"  # Enables INT8 quantization for max speed
-# )
-# print("✅ Whisper model loaded (Model: small, Device: CPU, Compute: INT8)")
-
-# # ---------- Audio extractor ----------
-# def extract_audio(video_path, output_audio="temp_audio.wav"):
-#     """Extract mono 16kHz audio using ffmpeg."""
-#     print(f"\n🎬 Extracting audio from video: {video_path}")
-#     command = ["ffmpeg", "-i", video_path, "-ar", "16000", "-ac", "1", output_audio, "-y"]
-#     print(f"--- DEBUG: FFmpeg command: {' '.join(command)}")
-    
-#     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
-#     if os.path.exists(output_audio):
-#         print(f"✅ Extracted audio → {output_audio}")
-#     else:
-#         print(f"❌ ERROR: Audio extraction failed for {video_path}.")
-#     return output_audio
-
-# # ---------- Transcribe (New Optimized Function) ----------
-# def transcribe_audio(audio_path):
-#     """Transcribe entire audio using faster-whisper's optimized engine."""
-#     print(f"--- DEBUG: Starting transcription for: {audio_path}")
-    
-#     # model.transcribe handles audio loading and chunking internally
-#     segments, info = model.transcribe(audio_path, beam_size=5)
-
-#     print(f"--- DEBUG: Model detected language for entire file: {info.language}")
-#     print(f"--- DEBUG: Model transcription speed RTF (Lower is better): {info.language_probability}")
-
-#     langs_detected = {}
-#     texts = []
-#     segment_count = 0
-    
-#     # Iterate through segments returned by the model
-#     for segment in segments:
-#         segment_count += 1
-#         seg_text = segment.text.strip()
-#         seg_lang = info.language # Use the language detected for the whole file
-        
-#         if seg_text:
-#             word_count = len(seg_text.split())
-#             texts.append(seg_text)
-#             langs_detected[seg_lang] = langs_detected.get(seg_lang, 0) + word_count
-#             print(f"   🎧 Segment {segment_count}: Detected {seg_lang}, Words: {word_count}. Text: '{seg_text[:50]}...'")
-        
-#         else:
-#              print(f"   🎧 Segment {segment_count}: Skipped (No text found).")
-
-
-#     print(f"--- DEBUG: Total segments processed: {segment_count}")
-#     return " ".join(texts), langs_detected
-
-# # ---------- Core ----------
-# def process_file(file_path):
-#     print(f"\n=======================================================")
-#     print(f"🚀 Processing file: {os.path.basename(file_path)}")
-#     print(f"   FULL PATH: {file_path}")
-#     print(f"=======================================================")
-    
-#     file_ext = os.path.splitext(file_path)[1].lower()
-    
-#     # Extract audio if it's a video
-#     if file_ext in [".mp4", ".mkv", ".avi", ".mov"]:
-#         print(f"--- DEBUG: File recognized as VIDEO ({file_ext}). Extracting audio.")
-#         audio_path = extract_audio(file_path)
-#     else:
-#         print(f"--- DEBUG: File recognized as AUDIO ({file_ext} or unknown). Using file directly.")
-#         audio_path = file_path
-
-#     # Transcribe audio 
-#     text, lang_weights = transcribe_audio(audio_path)
-    
-#     langs_sorted = sorted(lang_weights.items(), key=lambda x: x[1], reverse=True)
-#     detected_langs = [l for l, _ in langs_sorted]
-    
-#     print(f"--- DEBUG: Sorted language weights (Word Count): {langs_sorted}")
-#     print(f"🌍 Languages detected with weights: {lang_weights}")
-
-#     # Cleanup + heuristic
-#     cleaned_text = text.replace("♪", "").replace("♫", "").strip()
-#     word_count = len(cleaned_text.split())
-    
-#     print(f"--- DEBUG: Total cleaned transcription length: {len(cleaned_text)} characters")
-#     print(f"🔍 Word count: {word_count}")
-
-#     # --- Classification Logic ---
-#     base_folder = None
-    
-#     if "hi" in detected_langs and "ur" in detected_langs and word_count > 10:
-#         primary_lang = "hi"
-#         language = LANG_MAP.get(primary_lang, primary_lang)
-#         base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-#         print(f"➡️ CLASSIFICATION: VOCALS ({language}). Reason: Hindi/Urdu Mix and word count > 10.")
-#     elif word_count <= 10:
-#         base_folder = BGM_DIR
-#         print("➡️ CLASSIFICATION: PURE BGM. Reason: Word count <= 10.")
-#     elif len(detected_langs) >= 2:
-#         base_folder = REMIX_DIR
-#         print(f"➡️ CLASSIFICATION: REMIX. Reason: Multiple Languages detected ({detected_langs}).")
-#     else:
-#         primary_lang = detected_langs[0] if detected_langs else "unknown"
-#         language = LANG_MAP.get(primary_lang, primary_lang)
-#         base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-#         print(f"➡️ CLASSIFICATION: VOCALS ({language}). Reason: Primary language detected.")
-
-#     if not base_folder:
-#         print("❌ ERROR: Classification logic failed to assign a base folder.")
-#         return
-
-#     final_destination_dir = base_folder
-#     print(f"--- DEBUG: Target move directory: {final_destination_dir}")
-#     os.makedirs(final_destination_dir, exist_ok=True)
-
-#     # Move file
-#     destination = os.path.join(final_destination_dir, os.path.basename(file_path))
-    
-#     print(f"--- DEBUG: Initial destination path: {destination}")
-
-#     if os.path.exists(destination):
-#         base, ext = os.path.splitext(destination)
-#         i = 1
-#         while os.path.exists(f"{base}_copy{i}{ext}"):
-#             i += 1
-#         destination = f"{base}_copy{i}{ext}"
-#         print(f"--- DEBUG: Renaming required. New destination path: {destination}")
-
-#     try:
-#         shutil.move(file_path, destination)
-#         print(f"✅ Final move successful → {destination}")
-#     except Exception as e:
-#         print(f"❌ ERROR: File move failed for {file_path}. Error: {e}")
-
-
-# # language_detector.py
-
-# import os
-# import shutil
-# import subprocess
-# from faster_whisper import WhisperModel
-# from langdetect import DetectorFactory, detect_langs
-
-# # ---------- Stability ----------
-# DetectorFactory.seed = 0
-# print("--- DEBUG: Stability seed set to 0 ---")
-
-# # ---------- Paths ----------
-# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# OUTPUT_DIR = os.path.join(BASE_DIR, "data", "output")
-
-# LANGUAGES_DIR = os.path.join(OUTPUT_DIR, "Languages")
-# BGM_DIR = os.path.join(OUTPUT_DIR, "bgm")
-# REMIX_DIR = os.path.join(OUTPUT_DIR, "remix")
-
-# print(f"--- DEBUG: BASE_DIR: {BASE_DIR}")
-# print(f"--- DEBUG: Output directories setup: Languages={LANGUAGES_DIR}, BGM={BGM_DIR}, REMIX={REMIX_DIR}")
-
-# os.makedirs(LANGUAGES_DIR, exist_ok=True)
-# os.makedirs(BGM_DIR, exist_ok=True)
-# os.makedirs(REMIX_DIR, exist_ok=True)
-
-# # ---------- Lang map (remains the same) ----------
-# LANG_MAP = {
-#     "en": "english", "hi": "hindi", "te": "telugu", "ta": "tamil", "ml": "malayalam",
-#     "kn": "kannada", "gu": "gujarati", "bn": "bengali", "pa": "punjabi", "ur": "urdu",
-#     "fr": "french", "es": "spanish", "de": "german", "it": "italian", "zh": "chinese",
-#     "ja": "japanese", "ko": "korean", "mr": "marathi", "unknown": "unknown",
-# }
-
-# # ---------- Whisper (Updated for faster-whisper) ----------
-# print("📥 Loading Whisper model...")
-# model = WhisperModel(
-#     "small",             # Keeps your desired 'small' model size
-#     device="cpu",        # Explicitly targets the CPU
-#     compute_type="int8"  # Enables INT8 quantization for max speed
-# )
-# print("✅ Whisper model loaded (Model: small, Device: CPU, Compute: INT8)")
-
-# # ---------- Audio extractor ----------
-# def extract_audio(video_path, output_audio="temp_audio.wav"):
-#     """Extract mono 16kHz audio using ffmpeg."""
-#     print(f"\n🎬 Extracting audio from video: {video_path}")
-#     command = ["ffmpeg", "-i", video_path, "-ar", "16000", "-ac", "1", output_audio, "-y"]
-#     print(f"--- DEBUG: FFmpeg command: {' '.join(command)}")
-    
-#     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
-#     if os.path.exists(output_audio):
-#         print(f"✅ Extracted audio → {output_audio}")
-#     else:
-#         print(f"❌ ERROR: Audio extraction failed for {video_path}.")
-#     return output_audio
-
-# # ---------- Transcribe (New Optimized Function) ----------
-# def transcribe_audio(audio_path):
-#     """Transcribe entire audio using faster-whisper's optimized engine."""
-#     print(f"--- DEBUG: Starting transcription for: {audio_path}")
-    
-#     # model.transcribe handles audio loading and chunking internally
-#     segments, info = model.transcribe(audio_path, beam_size=5)
-
-#     print(f"--- DEBUG: Model detected language for entire file: {info.language}")
-#     print(f"--- DEBUG: Model transcription speed RTF (Lower is better): {info.language_probability}")
-
-#     langs_detected = {}
-#     texts = []
-#     segment_count = 0
-    
-#     # Iterate through segments returned by the model
-#     for segment in segments:
-#         segment_count += 1
-#         seg_text = segment.text.strip()
-#         seg_lang = info.language # Use the language detected for the whole file
-        
-#         if seg_text:
-#             word_count = len(seg_text.split())
-#             texts.append(seg_text)
-#             langs_detected[seg_lang] = langs_detected.get(seg_lang, 0) + word_count
-#             print(f"   🎧 Segment {segment_count}: Detected {seg_lang}, Words: {word_count}. Text: '{seg_text[:50]}...'")
-        
-#         else:
-#              print(f"   🎧 Segment {segment_count}: Skipped (No text found).")
-
-
-#     print(f"--- DEBUG: Total segments processed: {segment_count}")
-#     return " ".join(texts), langs_detected
-
-# # ---------- Core ----------
-# def process_file(file_path):
-#     print(f"\n=======================================================")
-#     print(f"🚀 Processing file: {os.path.basename(file_path)}")
-#     print(f"   FULL PATH: {file_path}")
-#     print(f"=======================================================")
-    
-#     file_name_no_ext = os.path.splitext(os.path.basename(file_path))[0]
-
-#     # --- NEW FEATURE: Filename-based Remix Check (Pre-Transcription) ---
-#     # Check for the pattern " X " (case-insensitive) in the filename
-#     if " X " in file_name_no_ext.upper():
-#         print("✅ FILENAME CLASSIFICATION: REMIX. Reason: Filename contains ' X ' pattern.")
-#         base_folder = REMIX_DIR
-        
-#         # Skip transcription and immediately move the file
-#         final_destination_dir = base_folder
-#         print(f"--- DEBUG: Target move directory (Pre-classified): {final_destination_dir}")
-#         os.makedirs(final_destination_dir, exist_ok=True)
-        
-#         destination = os.path.join(final_destination_dir, os.path.basename(file_path))
-#         print(f"--- DEBUG: Initial destination path: {destination}")
-
-#         if os.path.exists(destination):
-#             base, ext = os.path.splitext(destination)
-#             i = 1
-#             while os.path.exists(f"{base}_copy{i}{ext}"):
-#                 i += 1
-#             destination = f"{base}_copy{i}{ext}"
-#             print(f"--- DEBUG: Renaming required. New destination path: {destination}")
-            
-#         try:
-#             shutil.move(file_path, destination)
-#             print(f"✅ Final move successful (Skipped transcription) → {destination}")
-#             return # IMPORTANT: Exit the function after moving
-
-#         except Exception as e:
-#             print(f"❌ ERROR: File move failed for {file_path}. Error: {e}")
-#             return
-    
-#     # --- CONTINUE WITH REGULAR PROCESSING (If not a filename-based remix) ---
-    
-#     file_ext = os.path.splitext(file_path)[1].lower()
-
-#     # Extract audio if it's a video
-#     if file_ext in [".mp4", ".mkv", ".avi", ".mov"]:
-#         print(f"--- DEBUG: File recognized as VIDEO ({file_ext}). Extracting audio.")
-#         audio_path = extract_audio(file_path)
-#     else:
-#         print(f"--- DEBUG: File recognized as AUDIO ({file_ext} or unknown). Using file directly.")
-#         audio_path = file_path
-
-#     # Transcribe audio 
-#     text, lang_weights = transcribe_audio(audio_path)
-    
-#     langs_sorted = sorted(lang_weights.items(), key=lambda x: x[1], reverse=True)
-#     detected_langs = [l for l, _ in langs_sorted]
-    
-#     print(f"--- DEBUG: Sorted language weights (Word Count): {langs_sorted}")
-#     print(f"🌍 Languages detected with weights: {lang_weights}")
-
-#     # Cleanup + heuristic
-#     cleaned_text = text.replace("♪", "").replace("♫", "").strip()
-#     word_count = len(cleaned_text.split())
-    
-#     print(f"--- DEBUG: Total cleaned transcription length: {len(cleaned_text)} characters")
-#     print(f"🔍 Word count: {word_count}")
-
-#     # --- Classification Logic (Transcription-based) ---
-#     base_folder = None
-    
-#     if "hi" in detected_langs and "ur" in detected_langs and word_count > 10:
-#         primary_lang = "hi"
-#         language = LANG_MAP.get(primary_lang, primary_lang)
-#         base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-#         print(f"➡️ CLASSIFICATION: VOCALS ({language}). Reason: Hindi/Urdu Mix and word count > 10.")
-#     elif word_count <= 10:
-#         base_folder = BGM_DIR
-#         print("➡️ CLASSIFICATION: PURE BGM. Reason: Word count <= 10.")
-#     elif len(detected_langs) >= 2:
-#         base_folder = REMIX_DIR
-#         print(f"➡️ CLASSIFICATION: REMIX. Reason: Multiple Languages detected ({detected_langs}).")
-#     else:
-#         primary_lang = detected_langs[0] if detected_langs else "unknown"
-#         language = LANG_MAP.get(primary_lang, primary_lang)
-#         base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-#         print(f"➡️ CLASSIFICATION: VOCALS ({language}). Reason: Primary language detected.")
-
-#     if not base_folder:
-#         print("❌ ERROR: Classification logic failed to assign a base folder.")
-#         return
-
-#     final_destination_dir = base_folder
-#     print(f"--- DEBUG: Target move directory: {final_destination_dir}")
-#     os.makedirs(final_destination_dir, exist_ok=True)
-
-#     # Move file (Final move for non-preclassified files)
-#     destination = os.path.join(final_destination_dir, os.path.basename(file_path))
-    
-#     print(f"--- DEBUG: Initial destination path: {destination}")
-
-#     if os.path.exists(destination):
-#         base, ext = os.path.splitext(destination)
-#         i = 1
-#         while os.path.exists(f"{base}_copy{i}{ext}"):
-#             i += 1
-#         destination = f"{base}_copy{i}{ext}"
-#         print(f"--- DEBUG: Renaming required. New destination path: {destination}")
-
-#     try:
-#         shutil.move(file_path, destination)
-#         print(f"✅ Final move successful → {destination}")
-#     except Exception as e:
-#         print(f"❌ ERROR: File move failed for {file_path}. Error: {e}")
-
-
-# language_detector.py
-
 import os
 import shutil
 import subprocess
+import logging
+import hashlib
+import tempfile
+import json
+
 from faster_whisper import WhisperModel
 from langdetect import DetectorFactory, detect_langs
-import hashlib
+
+# ---------- Logging Configuration ----------
+# Configure logging before any other module prints, so all output goes through logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # ---------- Stability ----------
 DetectorFactory.seed = 0
-print("--- DEBUG: Stability seed set to 0 ---")
+logger.debug("Stability seed set to 0.")
 
-# ---------- Paths ----------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, "data", "output")
+# ---------- Configuration (Can be externalized further to a separate config file) ----------
+CONFIG = {
+    "whisper_model_size": "small",
+    "whisper_device": "cpu",
+    "whisper_compute_type": "int8",
+    "whisper_beam_size": 5,
+    "bgm_word_count_threshold": 10,
+    "remix_filename_pattern": " X ", # Used for early exit remix detection (e.g., "song X remix")
+    "min_second_lang_share_for_remix": 0.20, # Minimum share for a second language to classify as remix
+    "processed_hashes_file": "processed_hashes.json", # File to store processed hashes
+    "base_output_dir": "data/output",
+}
 
-LANGUAGES_DIR = os.path.join(OUTPUT_DIR, "Languages")
-BGM_DIR = os.path.join(OUTPUT_DIR, "bgm")
-REMIX_DIR = os.path.join(OUTPUT_DIR, "remix")
-
-print(f"--- DEBUG: BASE_DIR: {BASE_DIR}")
-print(f"--- DEBUG: Output directories setup: Languages={LANGUAGES_DIR}, BGM={BGM_DIR}, REMIX={REMIX_DIR}")
-
-os.makedirs(LANGUAGES_DIR, exist_ok=True)
-os.makedirs(BGM_DIR, exist_ok=True)
-os.makedirs(REMIX_DIR, exist_ok=True)
-
-# 🆕 Global variable to store hashes of processed files
-PROCESSED_FILE_HASHES = set()
-
-# ---------- Lang map (remains the same) ----------
+# ---------- Language Map (Static lookup data) ----------
 LANG_MAP = {
     "en": "english", "hi": "hindi", "te": "telugu", "ta": "tamil", "ml": "malayalam",
     "kn": "kannada", "gu": "gujarati", "bn": "bengali", "pa": "punjabi", "ur": "urdu",
@@ -829,207 +39,333 @@ LANG_MAP = {
     "ja": "japanese", "ko": "korean", "mr": "marathi", "unknown": "unknown",
 }
 
-# ---------- Whisper (Updated for faster-whisper) ----------
-print("📥 Loading Whisper model...")
-model = WhisperModel(
-    "small",             # Keeps your desired 'small' model size
-    device="cpu",        # Explicitly targets the CPU
-    compute_type="int8"  # Enables INT8 quantization for max speed
-)
-print("✅ Whisper model loaded (Model: small, Device: CPU, Compute: INT8)")
+# ----------------------------------------------------------------------------------------------------
+# Encapsulated Logic in a Class: MediaClassifier
+# ----------------------------------------------------------------------------------------------------
 
-# ---------- Audio extractor ----------
-def extract_audio(video_path, output_audio="temp_audio.wav"):
-    """Extract mono 16kHz audio using ffmpeg."""
-    print(f"\n🎬 Extracting audio from video: {video_path}")
-    command = ["ffmpeg", "-i", video_path, "-ar", "16000", "-ac", "1", output_audio, "-y"]
-    print(f"--- DEBUG: FFmpeg command: {' '.join(command)}")
-    
-    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
-    if os.path.exists(output_audio):
-        print(f"✅ Extracted audio → {output_audio}")
-    else:
-        print(f"❌ ERROR: Audio extraction failed for {video_path}.")
-    return output_audio
+class MediaClassifier:
+    def __init__(self, config=CONFIG):
+        self.config = config
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
 
-# ---------- Transcribe (New Optimized Function) ----------
-def transcribe_audio(audio_path):
-    """Transcribe entire audio using faster-whisper's optimized engine."""
-    print(f"--- DEBUG: Starting transcription for: {audio_path}")
-    
-    # model.transcribe handles audio loading and chunking internally
-    segments, info = model.transcribe(audio_path, beam_size=5)
-
-    print(f"--- DEBUG: Model detected language for entire file: {info.language}")
-    print(f"--- DEBUG: Model transcription speed RTF (Lower is better): {info.language_probability}")
-
-    langs_detected = {}
-    texts = []
-    segment_count = 0
-    
-    # Iterate through segments returned by the model
-    for segment in segments:
-        segment_count += 1
-        seg_text = segment.text.strip()
-        seg_lang = info.language # Use the language detected for the whole file
+        # --- Output Directories ---
+        self.output_dir = os.path.join(self.base_dir, self.config["base_output_dir"])
+        self.languages_dir = os.path.join(self.output_dir, "Languages")
+        self.bgm_dir = os.path.join(self.output_dir, "bgm")
+        self.remix_dir = os.path.join(self.output_dir, "remix")
         
-        if seg_text:
-            word_count = len(seg_text.split())
-            texts.append(seg_text)
-            langs_detected[seg_lang] = langs_detected.get(seg_lang, 0) + word_count
-            print(f"   🎧 Segment {segment_count}: Detected {seg_lang}, Words: {word_count}. Text: '{seg_text[:50]}...'")
-        
-        else:
-            print(f"   🎧 Segment {segment_count}: Skipped (No text found).")
+        os.makedirs(self.languages_dir, exist_ok=True)
+        os.makedirs(self.bgm_dir, exist_ok=True)
+        os.makedirs(self.remix_dir, exist_ok=True)
+        logger.info(f"Output directories setup: Languages={self.languages_dir}, BGM={self.bgm_dir}, REMIX={self.remix_dir}")
 
-    print(f"--- DEBUG: Total segments processed: {segment_count}")
-    return " ".join(texts), langs_detected
+        # --- Whisper Model ---
+        logger.info("📥 Loading Whisper model...")
+        self.model = WhisperModel(
+            self.config["whisper_model_size"],
+            device=self.config["whisper_device"],
+            compute_type=self.config["whisper_compute_type"]
+        )
+        logger.info(f"✅ Whisper model loaded (Model: {self.config['whisper_model_size']}, Device: {self.config['whisper_device']}, Compute: {self.config['whisper_compute_type']})")
 
-# 🆕 New function to get file hash
-def get_file_hash(file_path):
-    """Generates an MD5 hash for a file, handling large files efficiently."""
-    try:
-        hasher = hashlib.md5()
-        with open(file_path, 'rb') as f:
-            buf = f.read(65536)
-            while len(buf) > 0:
-                hasher.update(buf)
-                buf = f.read(65536)
-        return hasher.hexdigest()
-    except Exception as e:
-        print(f"❌ ERROR: Could not get hash for {file_path}. Error: {e}")
-        return None
+        # --- Processed Hashes for Duplicate Detection ---
+        self.processed_file_hashes = set()
+        self._load_hashes()
+        logger.info(f"Loaded {len(self.processed_file_hashes)} previously processed file hashes.")
 
-# ---------- Core (Updated to include duplicate check) ----------
-def process_file(file_path):
-    print(f"\n=======================================================")
-    print(f"🚀 Processing file: {os.path.basename(file_path)}")
-    print(f"   FULL PATH: {file_path}")
-    print(f"=======================================================")
-    
-    # 🆕 CHECK FOR DUPLICATES BEFORE ANYTHING ELSE
-    file_hash = get_file_hash(file_path)
-    if file_hash:
-        print(f"--- DEBUG: File hash generated: {file_hash}")
-        if file_hash in PROCESSED_FILE_HASHES:
-            print("⚠️ DUPLICATE DETECTED! File with this hash has already been processed.")
+    def _load_hashes(self):
+        """Loads previously processed file hashes from a persistent storage."""
+        hashes_file_path = os.path.join(self.base_dir, self.config["processed_hashes_file"])
+        if os.path.exists(hashes_file_path):
             try:
-                os.remove(file_path)
-                print(f"🗑️ Successfully deleted duplicate file: {file_path}")
-            except Exception as e:
-                print(f"❌ ERROR: Failed to delete duplicate file: {file_path}. Error: {e}")
-            return # Exit the function immediately
+                with open(hashes_file_path, 'r', encoding='utf-8') as f:
+                    self.processed_file_hashes = set(json.load(f))
+                logger.debug(f"Successfully loaded hashes from {hashes_file_path}")
+            except (json.JSONDecodeError, IOError) as e:
+                logger.error(f"Error loading hashes from {hashes_file_path}: {e}")
         else:
-            # 🆕 Add the new file's hash to our set
-            PROCESSED_FILE_HASHES.add(file_hash)
-            print("✅ File is unique. Proceeding with processing.")
+            logger.info(f"Hashes file not found at {hashes_file_path}. Starting with empty hash set.")
 
-    # --- CONTINUE WITH REGULAR PROCESSING (If not a duplicate) ---
-    
-    file_name_no_ext = os.path.splitext(os.path.basename(file_path))[0]
-    
-    # --- NEW FEATURE: Filename-based Remix Check (Pre-Transcription) ---
-    if " X " in file_name_no_ext.upper():
-        print("✅ FILENAME CLASSIFICATION: REMIX. Reason: Filename contains ' X ' pattern.")
-        base_folder = REMIX_DIR
-        
-        final_destination_dir = base_folder
-        print(f"--- DEBUG: Target move directory (Pre-classified): {final_destination_dir}")
-        os.makedirs(final_destination_dir, exist_ok=True)
-        
-        destination = os.path.join(final_destination_dir, os.path.basename(file_path))
-        print(f"--- DEBUG: Initial destination path: {destination}")
+    def _save_hashes(self):
+        """Saves current processed file hashes to persistent storage."""
+        hashes_file_path = os.path.join(self.base_dir, self.config["processed_hashes_file"])
+        try:
+            # Convert set to list for JSON serialization
+            with open(hashes_file_path, 'w', encoding='utf-8') as f:
+                json.dump(list(self.processed_file_hashes), f, indent=2)
+            logger.info(f"Successfully saved {len(self.processed_file_hashes)} hashes to {hashes_file_path}")
+        except IOError as e:
+            logger.error(f"Error saving hashes to {hashes_file_path}: {e}")
 
-        if os.path.exists(destination):
-            base, ext = os.path.splitext(destination)
+    def __del__(self):
+        """Ensures hashes are saved when the object is garbage collected or script exits."""
+        self._save_hashes()
+        logger.debug("MediaClassifier object destroyed, hashes saved.")
+    
+    def get_file_hash(self, file_path):
+        """Generates an MD5 hash for a file, handling large files efficiently."""
+        try:
+            hasher = hashlib.md5()
+            with open(file_path, 'rb') as f:
+                buf = f.read(65536) # Read in 64KB chunks
+                while len(buf) > 0:
+                    hasher.update(buf)
+                    buf = f.read(65536)
+            return hasher.hexdigest()
+        except FileNotFoundError:
+            logger.error(f"File not found when trying to hash: {file_path}")
+            return None
+        except Exception as e:
+            logger.error(f"Could not get hash for {file_path}. Error: {e}")
+            return None
+
+    def extract_audio(self, video_path):
+        """
+        Extracts mono 16kHz audio using ffmpeg into a temporary file.
+        Returns the path to the temporary audio file.
+        """
+        logger.info(f"🎬 Extracting audio from video: {video_path}")
+        
+        # Use NamedTemporaryFile for automatic cleanup and unique names
+        # delete=False so that ffmpeg can open it, and we manually delete it later in `finally` block
+        temp_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        output_audio_path = temp_audio_file.name
+        temp_audio_file.close() # Close the file handle, ffmpeg will open it
+
+        command = [
+            "ffmpeg", "-i", video_path,
+            "-ar", "16000", "-ac", "1",
+            output_audio_path, "-y"
+        ]
+        logger.debug(f"FFmpeg command: {' '.join(command)}")
+        
+        # Capture stderr for improved error reporting
+        process = subprocess.run(command, capture_output=True, text=True)
+        
+        if process.returncode == 0:
+            logger.info(f"✅ Extracted audio → {output_audio_path}")
+        else:
+            logger.error(f"❌ ERROR: Audio extraction failed for {video_path}.")
+            logger.error(f"FFmpeg stdout: {process.stdout.strip()}")
+            logger.error(f"FFmpeg stderr: {process.stderr.strip()}")
+            if os.path.exists(output_audio_path):
+                os.remove(output_audio_path) # Clean up partial temp file if created
+            raise RuntimeError(f"FFmpeg failed with exit code {process.returncode}: {process.stderr.strip()}")
+        
+        return output_audio_path
+
+    def transcribe_audio(self, audio_path):
+        """
+        Transcribes audio using faster-whisper.
+        Populates language weights based on segment-level language detection
+        from faster-whisper.
+        """
+        logger.info(f"--- Starting transcription for: {os.path.basename(audio_path)}")
+        
+        # Use vad_filter=True to enable segment-level language detection,
+        # and allow Whisper to detect language per segment without pre-specifying.
+        segments_generator, info = self.model.transcribe(
+            audio_path,
+            beam_size=self.config["whisper_beam_size"],
+            vad_filter=True, # Enable VAD filter for better segmenting and language per segment
+            language=None # Allows Whisper to detect language per segment initially
+        )
+
+        overall_lang = info.language
+        logger.info(f"--- Whisper's overall detected language for file: {overall_lang} (prob: {info.language_probability:.2f})")
+
+        texts = []
+        whisper_segment_langs_weighted = {} # {lang_code: total_word_count}
+
+        for i, segment in enumerate(segments_generator):
+            seg_text = segment.text.strip()
+            # Use segment.language for more granular language detection provided by faster-whisper
+            seg_lang = segment.language 
+            
+            if seg_text:
+                word_count = len(seg_text.split())
+                texts.append(seg_text)
+                whisper_segment_langs_weighted[seg_lang] = whisper_segment_langs_weighted.get(seg_lang, 0) + word_count
+                logger.debug(f"   🎧 Segment {i+1}: Lang='{seg_lang}', Words={word_count}, Text='{seg_text[:70]}...'")
+            else:
+                logger.debug(f"   🎧 Segment {i+1}: Skipped (No text found).")
+
+        full_transcription_text = " ".join(texts).strip()
+
+        # Refine Multilingual Detection: Use `langdetect.detect_langs` on the full text
+        # for a secondary confirmation or to catch languages Whisper might have missed entirely
+        # in segments due to very short or very mixed utterances.
+        if full_transcription_text:
+            try:
+                langdetect_results = detect_langs(full_transcription_text)
+                # langdetect_results would be like [en:0.999992, fr:6.89e-06]
+                logger.debug(f"--- LangDetect on full text: {langdetect_results}")
+                
+                # Integrate langdetect results for remix classification if they are significant
+                for ld_result in langdetect_results:
+                    if ld_result.prob > 0.15: # Consider languages with at least 15% probability from langdetect
+                        lang_code = ld_result.lang.split("-")[0]
+                        # If langdetect finds a language that Whisper didn't assign any words to,
+                        # give it a small artificial weight to be considered for remix.
+                        # This ensures multi-language detection is more robust.
+                        if lang_code not in whisper_segment_langs_weighted:
+                            whisper_segment_langs_weighted[lang_code] = whisper_segment_langs_weighted.get(lang_code, 0) + 5 # Add a small weight (e.g., 5 words)
+            except Exception as e:
+                logger.warning(f"LangDetect failed on full text: {e}")
+        else:
+            logger.info("No transcription text to run LangDetect on.")
+
+
+        logger.info(f"--- Transcription complete. Languages (from segments, weighted): {whisper_segment_langs_weighted}")
+        return full_transcription_text, whisper_segment_langs_weighted
+
+    def process_file(self, file_path):
+        """
+        Processes a single media file: checks for duplicates, extracts audio,
+        transcribes, detects languages, and moves the file to the appropriate folder.
+        """
+        logger.info(f"\n=======================================================")
+        logger.info(f"🚀 Processing file: {os.path.basename(file_path)}")
+        logger.info(f"   FULL PATH: {file_path}")
+        logger.info(f"=======================================================")
+        
+        # 1. CHECK FOR DUPLICATES BEFORE ANYTHING ELSE
+        file_hash = self.get_file_hash(file_path)
+        if file_hash:
+            logger.debug(f"File hash generated: {file_hash}")
+            if file_hash in self.processed_file_hashes:
+                logger.warning("⚠️ DUPLICATE DETECTED! File with this hash has already been processed.")
+                try:
+                    os.remove(file_path)
+                    logger.info(f"🗑️ Successfully deleted duplicate file: {file_path}")
+                except Exception as e:
+                    logger.error(f"❌ ERROR: Failed to delete duplicate file: {file_path}. Error: {e}")
+                return # Exit the function immediately
+            else:
+                # Add the new file's hash to our set
+                self.processed_file_hashes.add(file_hash)
+                logger.info("✅ File is unique. Proceeding with processing.")
+        else:
+            logger.error(f"Could not generate hash for {file_path}. Skipping duplicate check. File will be processed and its hash will not be saved.")
+            # If hash generation fails, we still process the file but cannot mark it as processed persistently.
+
+        file_name_no_ext = os.path.splitext(os.path.basename(file_path))[0]
+        
+        # 2. FILENAME-BASED REMIX CHECK (Early exit)
+        if self.config["remix_filename_pattern"] in file_name_no_ext.upper():
+            logger.info(f"✅ FILENAME CLASSIFICATION: REMIX. Reason: Filename contains '{self.config['remix_filename_pattern']}' pattern.")
+            base_folder = self.remix_dir
+            self._move_file(file_path, base_folder)
+            return # IMPORTANT: Exit the function after moving
+        
+        # 3. EXTRACT AUDIO IF VIDEO
+        file_ext = os.path.splitext(file_path)[1].lower()
+        temp_audio_path = None # Initialize to None for cleanup
+        
+        try:
+            if file_ext in [".mp4", ".mkv", ".avi", ".mov"]:
+                logger.debug(f"File recognized as VIDEO ({file_ext}). Extracting audio.")
+                temp_audio_path = self.extract_audio(file_path)
+                audio_source_path = temp_audio_path
+            else:
+                logger.debug(f"File recognized as AUDIO ({file_ext} or unknown). Using file directly.")
+                audio_source_path = file_path
+
+            # 4. TRANSCRIBE AUDIO
+            text, lang_weights = self.transcribe_audio(audio_source_path)
+            
+            # Sort detected languages by their accumulated word count
+            langs_sorted = sorted(lang_weights.items(), key=lambda x: x[1], reverse=True)
+            detected_langs_codes = [l for l, _ in langs_sorted] # e.g., ['en', 'hi']
+            
+            logger.debug(f"Sorted language weights (Word Count): {langs_sorted}")
+            logger.info(f"🌍 Languages detected (Whisper segments & LangDetect hints): {lang_weights}")
+
+            # 5. CLEANUP + HEURISTIC
+            cleaned_text = text.replace("♪", "").replace("♫", "").strip()
+            word_count = len(cleaned_text.split())
+            
+            logger.debug(f"Total cleaned transcription length: {len(cleaned_text)} characters")
+            logger.info(f"🔍 Word count: {word_count}")
+
+            # 6. CLASSIFICATION LOGIC (Transcription-based)
+            base_folder = None
+            
+            # Special case: Hindi/Urdu. If both are significantly present and text exists.
+            if "hi" in detected_langs_codes and "ur" in detected_langs_codes and word_count > self.config["bgm_word_count_threshold"]:
+                primary_lang = "hi" # Arbitrarily pick hi as primary if both are present
+                language = LANG_MAP.get(primary_lang, primary_lang)
+                base_folder = os.path.join(self.languages_dir, language, "vocals")
+                logger.info(f"➡️ CLASSIFICATION: VOCALS ({language}). Reason: Hindi/Urdu Mix and word count > {self.config['bgm_word_count_threshold']}.")
+            # Case: Pure BGM (very few words)
+            elif word_count <= self.config["bgm_word_count_threshold"]:
+                base_folder = self.bgm_dir
+                logger.info(f"➡️ CLASSIFICATION: PURE BGM. Reason: Word count <= {self.config['bgm_word_count_threshold']}.")
+            # Case: Remix (multiple languages detected based on segment weights and share threshold)
+            else: # If not BGM and not Hindi/Urdu special, check for general remix or single language
+                is_remix_by_share = False
+                total_weight = sum(lang_weights.values())
+                if len(langs_sorted) >= 2 and total_weight > 0:
+                    second_lang_share = langs_sorted[1][1] / total_weight
+                    is_remix_by_share = second_lang_share >= self.config["min_second_lang_share_for_remix"]
+                    logger.debug(f"Second language share: {second_lang_share:.2f} (Threshold: {self.config['min_second_lang_share_for_remix']})")
+
+                if is_remix_by_share:
+                    # Construct a more descriptive remix folder name
+                    # Take top 2 languages for the folder name
+                    pretty_langs = [LANG_MAP.get(l, l) for l, _ in langs_sorted[:2]]
+                    remix_folder_name = f"Remix ({' + '.join(pretty_langs)})"
+                    base_folder = os.path.join(self.remix_dir, remix_folder_name)
+                    logger.info(f"➡️ CLASSIFICATION: REMIX. Reason: Multiple prominent languages detected (Share-based).")
+                # Case: Single language vocals
+                else:
+                    primary_lang_code = detected_langs_codes[0] if detected_langs_codes else "unknown"
+                    language_name = LANG_MAP.get(primary_lang_code, primary_lang_code)
+                    base_folder = os.path.join(self.languages_dir, language_name, "vocals")
+                    logger.info(f"➡️ CLASSIFICATION: VOCALS ({language_name}). Reason: Primary language detected.")
+
+            if not base_folder:
+                logger.error("❌ ERROR: Classification logic failed to assign a base folder.")
+                return
+
+            # 7. MOVE FILE
+            self._move_file(file_path, base_folder)
+
+        except RuntimeError as e: # Catch FFmpeg errors, etc.
+            logger.error(f"❌ Processing failed for {file_path}: {e}")
+        except Exception as e:
+            logger.error(f"❌ An unexpected error occurred while processing {file_path}: {e}", exc_info=True)
+        finally:
+            # 8. CLEANUP TEMPORARY AUDIO FILE
+            if temp_audio_path and os.path.exists(temp_audio_path):
+                try:
+                    os.remove(temp_audio_path)
+                    logger.debug(f"Cleaned up temporary audio file: {temp_audio_path}")
+                except Exception as e:
+                    logger.error(f"❌ ERROR: Failed to remove temporary audio file {temp_audio_path}: {e}")
+
+    def _move_file(self, source_path, destination_dir):
+        """Helper to move a file, handling name conflicts."""
+        logger.debug(f"Target move directory: {destination_dir}")
+        os.makedirs(destination_dir, exist_ok=True)
+
+        original_file_name = os.path.basename(source_path)
+        destination_path = os.path.join(destination_dir, original_file_name)
+        
+        logger.debug(f"Initial destination path: {destination_path}")
+
+        # Handle duplicate filenames in the target directory by appending a copy number
+        if os.path.exists(destination_path):
+            base, ext = os.path.splitext(destination_path)
             i = 1
             while os.path.exists(f"{base}_copy{i}{ext}"):
                 i += 1
-            destination = f"{base}_copy{i}{ext}"
-            print(f"--- DEBUG: Renaming required. New destination path: {destination}")
-            
+            destination_path = f"{base}_copy{i}{ext}"
+            logger.warning(f"Filename collision, renaming to: {destination_path}")
+
         try:
-            shutil.move(file_path, destination)
-            print(f"✅ Final move successful (Skipped transcription) → {destination}")
-            return # IMPORTANT: Exit the function after moving
-
+            shutil.move(source_path, destination_path)
+            logger.info(f"✅ Final move successful → {destination_path}")
         except Exception as e:
-            print(f"❌ ERROR: File move failed for {file_path}. Error: {e}")
-            return
-    
-    # --- CONTINUE WITH REGULAR PROCESSING (If not a filename-based remix) ---
-    
-    file_ext = os.path.splitext(file_path)[1].lower()
-
-    # Extract audio if it's a video
-    if file_ext in [".mp4", ".mkv", ".avi", ".mov"]:
-        print(f"--- DEBUG: File recognized as VIDEO ({file_ext}). Extracting audio.")
-        audio_path = extract_audio(file_path)
-    else:
-        print(f"--- DEBUG: File recognized as AUDIO ({file_ext} or unknown). Using file directly.")
-        audio_path = file_path
-
-    # Transcribe audio 
-    text, lang_weights = transcribe_audio(audio_path)
-    
-    langs_sorted = sorted(lang_weights.items(), key=lambda x: x[1], reverse=True)
-    detected_langs = [l for l, _ in langs_sorted]
-    
-    print(f"--- DEBUG: Sorted language weights (Word Count): {langs_sorted}")
-    print(f"🌍 Languages detected with weights: {lang_weights}")
-
-    # Cleanup + heuristic
-    cleaned_text = text.replace("♪", "").replace("♫", "").strip()
-    word_count = len(cleaned_text.split())
-    
-    print(f"--- DEBUG: Total cleaned transcription length: {len(cleaned_text)} characters")
-    print(f"🔍 Word count: {word_count}")
-
-    # --- Classification Logic (Transcription-based) ---
-    base_folder = None
-    
-    if "hi" in detected_langs and "ur" in detected_langs and word_count > 10:
-        primary_lang = "hi"
-        language = LANG_MAP.get(primary_lang, primary_lang)
-        base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-        print(f"➡️ CLASSIFICATION: VOCALS ({language}). Reason: Hindi/Urdu Mix and word count > 10.")
-    elif word_count <= 10:
-        base_folder = BGM_DIR
-        print("➡️ CLASSIFICATION: PURE BGM. Reason: Word count <= 10.")
-    elif len(detected_langs) >= 2:
-        base_folder = REMIX_DIR
-        print(f"➡️ CLASSIFICATION: REMIX. Reason: Multiple Languages detected ({detected_langs}).")
-    else:
-        primary_lang = detected_langs[0] if detected_langs else "unknown"
-        language = LANG_MAP.get(primary_lang, primary_lang)
-        base_folder = os.path.join(LANGUAGES_DIR, language, "vocals")
-        print(f"➡️ CLASSIFICATION: VOCALS ({language}). Reason: Primary language detected.")
-
-    if not base_folder:
-        print("❌ ERROR: Classification logic failed to assign a base folder.")
-        return
-
-    final_destination_dir = base_folder
-    print(f"--- DEBUG: Target move directory: {final_destination_dir}")
-    os.makedirs(final_destination_dir, exist_ok=True)
-
-    # Move file (Final move for non-preclassified files)
-    destination = os.path.join(final_destination_dir, os.path.basename(file_path))
-    
-    print(f"--- DEBUG: Initial destination path: {destination}")
-
-    # The original check for duplicate filenames is still useful for unique naming
-    if os.path.exists(destination):
-        base, ext = os.path.splitext(destination)
-        i = 1
-        while os.path.exists(f"{base}_copy{i}{ext}"):
-            i += 1
-        destination = f"{base}_copy{i}{ext}"
-        print(f"--- DEBUG: Renaming required. New destination path: {destination}")
-
-    try:
-        shutil.move(file_path, destination)
-        print(f"✅ Final move successful → {destination}")
-    except Exception as e:
-        print(f"❌ ERROR: File move failed for {file_path}. Error: {e}")
+            logger.error(f"❌ ERROR: File move failed for {source_path}. Error: {e}")
+            raise # Re-raise to allow main processing to catch if needed
