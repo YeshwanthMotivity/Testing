@@ -1,0 +1,11 @@
+langdetect
+speechrecognition
+openai-whisper
+google-cloud-speech
+moviepy
+ffmpeg-python
+spleeter
+torch
+tensorflow
+opencv-python
+deepface
