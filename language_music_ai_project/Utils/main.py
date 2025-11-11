@@ -1,90 +1,79 @@
-# from language_detector import process_file
-# # from demcus import separate_music
-# import os
-# # from deepfake_detector import detect_deepfake
-
-# def main(file_path):
-#     # Step 1: Detect & segregate language
-#     process_file(file_path)
-
-#     # # Step 2: Separate BGM & Lyrics if video
-    
-#     # Create an output folder
-#     output_dir = os.path.join(os.getcwd(), "separated_files")
-#     os.makedirs(output_dir, exist_ok=True)
-
-#     # # Call music separation with file path and output dir
-#     # separate_music(file_path, output_dir)
-
-#     # # Step 3: Detect AI vs Real
-#     # detect_deepfake(file_path)
-
-# if __name__ == "__main__":
-#     file_path = r"C:\Users\Yeshwanth\Documents\songs\ORQUESTRA MALDITA (BRAZILIAN PHONK).mp3"
-#     main(file_path)
-
-
-# main.py
-
-# main.py
-
-from language_detector import process_file # process_file is the core function
 import os
-# from demcus import separate_music
-# from deepfake_detector import detect_deepfake
+import argparse
+import logging
+from language_detector import process_file
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def process_language_detection(file_path):
+    """
+    Performs language detection and segregation on the given file.
+    This function wraps the external `process_file` for pipeline integration.
+    """
+    logger.info(f"Detecting & segregating language for: {file_path}")
+    process_file(file_path) # Assuming process_file handles moving the file
+    logger.info(f"Language processing complete for: {file_path}")
+
+# Define the processing pipeline.
+# This list can be extended with more processor functions in the future.
+# Each function in the pipeline should accept a file_path argument.
+processing_pipeline = [
+    process_language_detection,
+    # Example for future integration:
+    # separate_music_step,
+    # detect_deepfake_step,
+]
 
 def main(folder_path):
     """
-    Iterates through all media files in the given folder and processes them 
-    one by one using the language detection and segregation logic.
+    Iterates through all media files in the given folder and processes them
+    one by one using the configured processing pipeline.
     """
-    # Check if the path is a valid directory
     if not os.path.isdir(folder_path):
-        print(f"Error: Path is not a valid folder: {folder_path}")
+        logger.error(f"Error: Path is not a valid directory: {folder_path}")
         return
 
-    print(f"\n--- Starting batch processing in: {folder_path} ---")
+    logger.info(f"\n--- Starting batch processing in: {folder_path} ---")
 
-    # List of media extensions to process
     media_extensions = ('.mp3', '.mp4', '.mkv', '.avi', '.mov', '.wav', '.flac')
 
-    # Iterate through all files in the directory
-    for file_name in os.listdir(folder_path):
-        full_file_path = os.path.join(folder_path, file_name)
-        
-        # Check if the item is a file and has a supported media extension
-        if os.path.isfile(full_file_path) and full_file_path.lower().endswith(media_extensions):
-            try:
-                # Step 1: Detect & segregate language (Sequential Processing)
-                # The loop waits here until process_file completes the move operation.
-                process_file(full_file_path)
+    try:
+        for file_name in os.listdir(folder_path):
+            full_file_path = os.path.join(folder_path, file_name)
 
-                # --- Integration Points (Optional/Future Steps) ---
-                # These steps would typically happen *after* language segregation 
-                # but *before* the file is moved, or you would process the file's 
-                # copy from the output directory.
+            if os.path.isfile(full_file_path) and full_file_path.lower().endswith(media_extensions):
+                logger.info(f"Processing file: {file_name}")
+                try:
+                    # Execute each step in the processing pipeline
+                    for processor_func in processing_pipeline:
+                        processor_func(full_file_path)
+                except Exception as e:
+                    # Catch general exceptions for individual file processing steps
+                    logger.error(f"❌ An error occurred during processing pipeline for {file_name}: {e}")
+            else:
+                logger.info(f"⏭️ Skipping non-file or unsupported file: {file_name}")
+    except FileNotFoundError:
+        logger.error(f"Error: The directory '{folder_path}' does not exist.")
+    except PermissionError:
+        logger.error(f"Error: Permission denied when accessing '{folder_path}'.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during directory listing for '{folder_path}': {e}")
 
-                # output_dir = os.path.join(os.getcwd(), "separated_files")
-                # os.makedirs(output_dir, exist_ok=True)
-                
-                # # Call music separation with file path and output dir
-                # # separate_music(full_file_path, output_dir)
-
-                # # Step 3: Detect AI vs Real
-                # # detect_deepfake(full_file_path)
-
-            except Exception as e:
-                print(f"❌ An error occurred while processing {file_name}: {e}")
-                
-        else:
-            print(f"⏭️ Skipping non-file or unsupported file: {file_name}")
-
-    print("\n--- Batch processing complete! All media files have been classified and moved. ---")
+    logger.info("\n--- Batch processing complete! ---")
 
 
 if __name__ == "__main__":
-    # ⚠️ UPDATE THIS LINE to the path of your folder containing multiple files
-    folder_path_to_process = r"C:\Users\Yeshwanth\Documents\songs"
-    
-    # The main function is now called with the folder path
-    main(folder_path_to_process)
+    parser = argparse.ArgumentParser(
+        description="Process media files in a given folder for language detection and segregation."
+    )
+    parser.add_argument(
+        "-p", "--path",
+        type=str,
+        help="The path to the folder containing media files to process.",
+        required=True
+    )
+
+    args = parser.parse_args()
+    main(args.path)
